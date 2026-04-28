@@ -2,87 +2,122 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
+# 1. Connection Setup
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- CONFIGURATION (This could also be loaded from a Google Sheet) ---
-# Example of how your grouped data is handled
-PRODUCT_MASTER = {
-    "Raw Materials": {
-        "Metals": ["Steel Rod 10mm", "Aluminum Sheet"],
-        "Chemicals": ["Industrial Solvent", "Epoxy Resin"]
-    },
-    "Packaging": {
-        "Boxes": ["Corrugated Box XL", "Small Mailer"],
-        "Labels": ["Adhesive Roll"]
-    }
-}
+# 2. Load Product Master (Tab 2 of your Google Sheet)
+# Ensure your sheet has a tab named 'Product_Master'
+@st.cache_data(ttl=600)
+def load_products():
+    return conn.read(worksheet="Product_Master")
 
-# Mapping for items with different Purchase/Sales units
-# Format: { Product: (Purchase Unit, Sales Unit, Default Conversion) }
-UNIT_MAPPING = {
-    "Steel Rod 10mm": ("Kg", "Pc", 5.5),  # 1 Pc = 5.5 Kg
-    "Industrial Solvent": ("Drum", "Litre", 200), # 1 Drum = 200 Litres
-}
+df_master = load_products()
 
-st.title("📦 Advanced Material Costing Ledger")
+st.title("📑 Multi-Item Material Costing Tool")
 
-# --- STEP 1: CATEGORIZATION ---
-st.subheader("Item Classification")
-c1, c2, c3 = st.columns(3)
+# --- SESSION STATE FOR MULTIPLE ITEMS ---
+if 'bill_items' not in st.session_state:
+    st.session_state.bill_items = []
 
-group = c1.selectbox("Group", list(PRODUCT_MASTER.keys()))
-sub_group = c2.selectbox("Sub-Group", list(PRODUCT_MASTER[group].keys()))
-product = c3.selectbox("Product", PRODUCT_MASTER[group][sub_group])
+# --- SECTION 1: BILL HEADER (Seller Info) ---
+st.header("1. Bill Header")
+with st.container(border=True):
+    c1, c2, c3 = st.columns(3)
+    seller_name = c1.text_input("Seller Company Name")
+    bill_no = c2.text_input("Bill No.")
+    purchase_date = c3.date_input("Purchase Date")
 
-# Check for special units
-p_unit, s_unit, conv_factor = UNIT_MAPPING.get(product, ("Kg", "Kg", 1.0))
-
-# --- STEP 2: QUANTITY & COSTING ---
-st.info(f"Unit Info: Purchased in **{p_unit}**, Tracked/Sold in **{s_unit}**")
-
-with st.form("costing_form"):
+# --- SECTION 2: ITEM ENTRY ---
+st.header("2. Add Items")
+with st.container(border=True):
+    # Dynamic Dropdowns based on Excel logic
     col1, col2, col3 = st.columns(3)
+    group = col1.selectbox("Group", df_master['Group'].unique())
     
-    qty_purchased = col1.number_input(f"Total Quantity ({p_unit})", min_value=0.01)
+    sub_groups = df_master[df_master['Group'] == group]['Sub-Group'].unique()
+    sub_group = col2.selectbox("Sub-Group", sub_groups)
     
-    # If units are different, allow user to confirm the piece count
-    if p_unit != s_unit:
-        qty_sales = col2.number_input(f"Equivalent Quantity ({s_unit})", value=qty_purchased * conv_factor)
-    else:
-        qty_sales = qty_purchased
+    products = df_master[(df_master['Group'] == group) & (df_master['Sub-Group'] == sub_group)]['Item_Name'].unique()
+    product_name = col3.selectbox("Product", products)
+
+    # Get specific item details for units
+    item_details = df_master[df_master['Item_Name'] == product_name].iloc[0]
+    p_unit = item_details['Purchase_Unit']
+    s_unit = item_details['Sales_Unit']
+    conv_fact = item_details['Conversion_Factor']
+
+    st.write(f"**Units:** Purchased in {p_unit}, Sold/Tracked in {s_unit}")
+
+    # Costing Inputs
+    i1, i2, i3 = st.columns(3)
+    qty_p = i1.number_input(f"Quantity ({p_unit})", min_value=0.0, step=0.1)
+    rate_p = i2.number_input(f"Rate (per {p_unit})", min_value=0.0)
+    
+    # Auto-calculate sales qty but allow override
+    qty_s = i3.number_input(f"Quantity ({s_unit})", value=qty_p * conv_fact)
+
+    st.write("---")
+    st.caption("Additional Costs & Discounts (Per Purchase Unit)")
+    f1, f2, f3, f4 = st.columns(4)
+    excise = f1.number_input("Excise", min_value=0.0)
+    trans = f2.number_input("Transport", min_value=0.0)
+    labour = f3.number_input("Labour", min_value=0.0)
+    
+    d_type = f4.selectbox("Discount Type", ["None", "Per Unit", "Percentage (%)"])
+    d_val = st.number_input("Discount Value", min_value=0.0)
+
+    if st.button("➕ Add Item to Bill"):
+        # Calculation Logic
+        sub_total_per_unit = rate_p + excise + trans + labour
+        if d_type == "Per Unit":
+            taxable = sub_total_per_unit - d_val
+        elif d_type == "Percentage (%)":
+            taxable = sub_total_per_unit * (1 - (d_val/100))
+        else:
+            taxable = sub_total_per_unit
         
-    rate_purchase = col3.number_input(f"Purchase Rate (per {p_unit})", min_value=0.0)
+        landed_rate = taxable * 1.13 # 13% VAT
+        total_item_cost = landed_rate * qty_p
+        cost_per_s_unit = total_item_cost / qty_s if qty_s > 0 else 0
 
-    st.markdown("---")
-    st.write("### Regulatory & Logistics (Per Kg/Unit)")
-    f1, f2, f3 = st.columns(3)
-    excise_val = f1.number_input("Excise Duty", help="Fixed amt per purchase unit")
-    trans_val = f2.number_input("Transport", help="Fixed amt per purchase unit")
-    labour_val = f3.number_input("Labour", help="Fixed amt per purchase unit")
+        # Store in session memory
+        st.session_state.bill_items.append({
+            "Seller": seller_name,
+            "Bill_No": bill_no,
+            "Date": str(purchase_date),
+            "Group": group,
+            "Sub-Group": sub_group,
+            "Material": product_name,
+            "Qty_Purchase": qty_p,
+            "Unit_Purchase": p_unit,
+            "Qty_Sales": qty_s,
+            "Unit_Sales": s_unit,
+            "Rate_Purchase": rate_p,
+            "Excise_Kg": excise,
+            "Transport_Kg": trans,
+            "Labour_Kg": labour,
+            "Landed_Rate_Purchase": round(landed_rate, 2),
+            "Cost_Pc": round(cost_per_s_unit, 2),
+            "Total_Item_Cost": round(total_item_cost, 2)
+        })
 
-    st.write("### Discounts")
-    d_type = st.selectbox("Type", ["None", "Per Unit", "Percentage (%)"])
-    d_val = st.number_input("Discount Value")
-
-    submit = st.form_submit_button("Record Purchase")
-
-if submit:
-    # Logic for Landed Cost
-    subtotal = (rate_purchase + excise_val + trans_val + labour_val)
+# --- SECTION 3: BILL PREVIEW & SAVE ---
+if st.session_state.bill_items:
+    st.header("3. Bill Review")
+    df_preview = pd.DataFrame(st.session_state.bill_items)
+    st.table(df_preview[['Material', 'Qty_Purchase', 'Unit_Purchase', 'Total_Item_Cost']])
     
-    if d_type == "Per Unit":
-        taxable = subtotal - d_val
-    elif d_type == "Percentage (%)":
-        taxable = subtotal * (1 - (d_val/100))
-    else:
-        taxable = subtotal
+    st.metric("Total Bill Value", f"{df_preview['Total_Item_Cost'].sum():,.2f}")
+
+    if st.button("💾 Final Save to Google Sheets"):
+        existing_data = conn.read(worksheet="Purchases")
+        updated_df = pd.concat([existing_data, df_preview], ignore_index=True)
+        conn.update(worksheet="Purchases", data=updated_df)
         
-    total_landed = (taxable * qty_purchased) * 1.13 # 13% Fixed VAT
-    
-    # Calculate Cost per Sales Unit
-    cost_per_sales_unit = total_landed / qty_sales
-    
-    st.success(f"Landed Cost per {s_unit}: **{round(cost_per_sales_unit, 2)}**")
-    
-    # --- SAVE TO SHEET ---
-    # (Same logic as previous version, adding Group/Sub-Group columns)
+        st.success("Entire bill saved successfully!")
+        st.session_state.bill_items = [] # Clear the bill
+        st.rerun()
+
+    if st.button("🗑️ Clear Bill"):
+        st.session_state.bill_items = []
+        st.rerun()
