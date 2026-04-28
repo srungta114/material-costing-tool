@@ -2,8 +2,16 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection # Ensure this is imported
 
-# This is the line that was missing:
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 1. Manually clean the private key string to handle \n issues
+if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+    secrets_dict = dict(st.secrets["connections"]["gsheets"])
+    # This fixes the common issue where \n is read as two characters instead of a newline
+    secrets_dict["private_key"] = secrets_dict["private_key"].replace("\\n", "\n")
+    
+    # 2. Connect using the cleaned dictionary
+    conn = st.connection("gsheets", type=GSheetsConnection, **secrets_dict)
+else:
+    st.error("GSheets secrets not found!")
 # --- 1. CONFIGURATION & DATA LOADING ---
 def get_csv_url(base_url, gid):
     # Converts the standard sheet URL into a direct CSV export for a specific tab
