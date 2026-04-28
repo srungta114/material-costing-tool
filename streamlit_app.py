@@ -125,8 +125,19 @@ if st.session_state.bill_items:
     st.metric("Total Bill Amount (Incl. 13% VAT)", f"{df_bill['Total_Item_Cost'].sum():,.2f}")
 
     if st.button("💾 Save Final Bill to Sheets"):
-        # Note: You can use the gsheets connection here if you have 
-        # write permissions set up, otherwise this displays a success message.
-        # For full write support, ensure Service Account JSON is in Secrets.
-        st.success("Data prepared for saving! (Check GSheets integration)")
-        st.session_state.bill_items = []
+        try:
+            # Load current data from the 'Purchases' tab
+            existing_data = conn.read(worksheet="Purchases")
+            
+            # Combine current history with the new bill
+            updated_df = pd.concat([existing_data, df_bill], ignore_index=True)
+            
+            # Write it back to the sheet
+            conn.update(worksheet="Purchases", data=updated_df)
+            
+            st.success("✅ Bill successfully recorded in Google Sheets!")
+            st.balloons()
+            st.session_state.bill_items = [] # Clear the bill for the next entry
+            st.rerun()
+        except Exception as e:
+            st.error(f"Save failed: {e}")
