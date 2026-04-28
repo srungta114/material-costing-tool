@@ -189,18 +189,22 @@ if st.session_state.bill_items:
 
     if st.button("💾 Save Final Bill to Sheets"):
         try:
-            # Load current data from the 'Purchases' tab
-            existing_data = conn.read(worksheet="Purchases")
+            # 1. Target your specific 'Purchases' tab
+            # Ensure your Google Sheet has a tab named exactly this!
+            purchases_sheet = sh.worksheet("Purchases")
             
-            # Combine current history with the new bill
-            updated_df = pd.concat([existing_data, df_bill], ignore_index=True)
+            # 2. Convert the pandas DataFrame into a raw list of lists
+            # We fill any empty cells with blank text so Google Sheets doesn't crash
+            df_bill_clean = df_bill.fillna("")
+            data_to_append = df_bill_clean.values.tolist()
             
-            # Write it back to the sheet
-            conn.update(worksheet="Purchases", data=updated_df)
+            # 3. Append the rows instantly to the bottom of the sheet
+            purchases_sheet.append_rows(data_to_append)
             
             st.success("✅ Bill successfully recorded in Google Sheets!")
             st.balloons()
-            st.session_state.bill_items = [] # Clear the bill for the next entry
+            st.session_state.bill_items = [] # Clear the app memory for the next bill
             st.rerun()
+            
         except Exception as e:
             st.error(f"Save failed: {e}")
