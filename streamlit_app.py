@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
+from streamlit_gsheets import GSheetsConnection # Ensure this is imported
 
+# This is the line that was missing:
+conn = st.connection("gsheets", type=GSheetsConnection)
 # --- 1. CONFIGURATION & DATA LOADING ---
 def get_csv_url(base_url, gid):
     # Converts the standard sheet URL into a direct CSV export for a specific tab
