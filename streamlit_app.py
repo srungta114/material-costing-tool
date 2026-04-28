@@ -4,8 +4,11 @@ import pandas as pd
 # This bypasses the gsheets connection library for reading
 # It converts your Google Sheet URL into a direct CSV download link
 def get_csv_url(base_url):
+    # This ensures we pull the SPECIFIC tab, not just the first one
+    # Replace '12345678' with the ACTUAL gid from your Product_Master tab URL
+    target_gid = "573342116" 
     if "/edit" in base_url:
-        return base_url.split("/edit")[0] + "/export?format=csv&gid=0"
+        return base_url.split("/edit")[0] + f"/export?format=csv&gid={target_gid}"
     return base_url
 
 # Load Secrets
