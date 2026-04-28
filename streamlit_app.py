@@ -171,7 +171,7 @@ with st.container(border=True):
     d_val = d2.number_input("Discount Value", min_value=0.0)
 
     if st.button("➕ Add Item to Bill"):
-        # Cost Calculation Logic
+        # 1. Base Cost Calculation for the CURRENT entry
         base_rate = rate_p + excise + trans + labour
         
         if d_type == "Per Unit":
@@ -185,27 +185,73 @@ with st.container(border=True):
         total_item_val = landed_rate_p * qty_p
         cost_per_s_unit = total_item_val / qty_s if qty_s > 0 else 0
 
-        # Add to memory
-        st.session_state.bill_items.append({
-            "Seller": seller_name,
-            "Bill_No": bill_no,
-            "Date": str(purchase_date),
-            "Group": group,
-            "Sub-Group": sub_group,
-            "Material": selected_product,
-            "Qty_Purchase": qty_p,
-            "Unit_Purchase": p_unit,
-            "Qty_Sales": qty_s,
-            "Unit_Sales": s_unit,
-            "Rate_Purchase": rate_p,
-            "Excise_Kg": excise,
-            "Transport_Kg": trans,
-            "Labour_Kg": labour,
-            "Landed_Rate_Purchase": round(landed_rate_p, 2),
-            "Cost_Pc": round(cost_per_s_unit, 2),
-            "Total_Item_Cost": round(total_item_val, 2)
-        })
-        st.success(f"Added {selected_product} to bill.")
+        # 2. Check if this product is already in the current bill
+        existing_item_index = None
+        for i, item in enumerate(st.session_state.bill_items):
+            if item["Material"] == selected_product:
+                existing_item_index = i
+                break
+
+        if existing_item_index is not None:
+            # --- MERGE LOGIC ---
+            # Remove the old entry from the list
+            old_item = st.session_state.bill_items.pop(existing_item_index)
+            
+            # Combine Quantities and Total Costs
+            new_qty_p = old_item["Qty_Purchase"] + qty_p
+            new_qty_s = old_item["Qty_Sales"] + qty_s
+            new_total_cost = old_item["Total_Item_Cost"] + total_item_val
+            
+            # Calculate the new Weighted Average Rates
+            avg_landed_rate = new_total_cost / new_qty_p if new_qty_p > 0 else 0
+            avg_cost_pc = new_total_cost / new_qty_s if new_qty_s > 0 else 0
+
+            # Add the merged entry back into the list
+            st.session_state.bill_items.append({
+                "Seller": seller_name,
+                "Bill_No": bill_no,
+                "Date": str(purchase_date),
+                "Group": group,
+                "Sub-Group": sub_group,
+                "Material": selected_product,
+                "Qty_Purchase": new_qty_p,
+                "Unit_Purchase": p_unit,
+                "Qty_Sales": new_qty_s,
+                "Unit_Sales": s_unit,
+                # For visual records, we average the input rates, but financial totals rely on the weighted landed rate
+                "Rate_Purchase": round((old_item["Rate_Purchase"] + rate_p) / 2, 2), 
+                "Excise_Kg": round((old_item["Excise_Kg"] + excise) / 2, 2),
+                "Transport_Kg": round((old_item["Transport_Kg"] + trans) / 2, 2),
+                "Labour_Kg": round((old_item["Labour_Kg"] + labour) / 2, 2),
+                "Landed_Rate_Purchase": round(avg_landed_rate, 2),
+                "Cost_Pc": round(avg_cost_pc, 2),
+                "Total_Item_Cost": round(new_total_cost, 2)
+            })
+            st.success(f"🔄 Merged {selected_product} with previous entry. Applied weighted average cost.")
+            
+        else:
+            # --- NEW ITEM LOGIC ---
+            # Add as a fresh entry if it doesn't exist yet
+            st.session_state.bill_items.append({
+                "Seller": seller_name,
+                "Bill_No": bill_no,
+                "Date": str(purchase_date),
+                "Group": group,
+                "Sub-Group": sub_group,
+                "Material": selected_product,
+                "Qty_Purchase": qty_p,
+                "Unit_Purchase": p_unit,
+                "Qty_Sales": qty_s,
+                "Unit_Sales": s_unit,
+                "Rate_Purchase": rate_p,
+                "Excise_Kg": excise,
+                "Transport_Kg": trans,
+                "Labour_Kg": labour,
+                "Landed_Rate_Purchase": round(landed_rate_p, 2),
+                "Cost_Pc": round(cost_per_s_unit, 2),
+                "Total_Item_Cost": round(total_item_val, 2)
+            })
+            st.success(f"➕ Added {selected_product} to bill.")
 
 # --- 5. REVIEW AND SAVE ---
 if st.session_state.bill_items:
