@@ -63,6 +63,24 @@ def load_products():
 df_master = load_products()
 df_master.columns = df_master.columns.str.strip()
 
+# --- ADD THIS NEW FUNCTION ---
+@st.cache_data(ttl=60)
+def load_sellers():
+    try:
+        purchases_sheet = sh.worksheet("Purchases")
+        df_purchases = pd.DataFrame(purchases_sheet.get_all_records())
+        # Check if the column exists and extract unique names
+        if 'Seller' in df_purchases.columns:
+            # Get unique, non-empty sellers
+            sellers = df_purchases['Seller'].dropna().unique().tolist()
+            return sorted([str(s).strip() for s in sellers if str(s).strip() != ""])
+        return []
+    except Exception:
+        return []
+
+existing_sellers = load_sellers()
+# -----------------------------
+
 # ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# Rest of your code follows...
 # --- 1. CONFIGURATION & DATA LOADING ---
 def get_csv_url(base_url, gid):
