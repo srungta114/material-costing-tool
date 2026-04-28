@@ -3,42 +3,67 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 1. Setup Credentials Dictionary
-# We use the raw string (r) to ensure no characters are lost
+# 1. Cleaned Credentials Dictionary
 gsheet_creds = {
     "type": "service_account",
     "project_id": "engaged-kite-494709-t7",
     "private_key_id": "3246aa828ad06c3520d2e3d5fac5aacebf3d6f75",
-    "private_key": st.secrets["connections"]["gsheets"]["private_key"].replace("\\n", "\n"),
+    "private_key": """-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDt+weYv7ztXToL
+NjSirZptnxgABGlaPvu77WZ6DNS4SO0umo5t5ENjXHnhmip60yEC/hv+5yZFnXkG
+aHxWEKktOQFrDxV9uPQs7JSxwb2ObZDH3kx9GeVU+z2Shxo8BOVfOpq62U8Y7l9+
+e8l3eBGXLP8J4sSzq3WKb9RBvxxNztDdfDTDOJMXhAe4sKIIwu3sY0Pd4OvMkjGv
+CpnWSzmCLgl4e6BdbMQmQsHPNK7Iaiaq7kCBZ9JHUlpg5IJOZRFcGDdxxp/QGZ5q
+1l6YZB90HUHB/aUuii6SoHWoylAjhq1wIlO+zrnPPXk+HDiLyYM+Dv8DRrXpW7dF
+B9A11xzdAgMBAAECggEAMryRfM0qFhAJazECDUnGUgc4am6GWIVzjXgaYDyCkIyJ
+tqUgZwjinhkt6f2Af4GqONVcuh5lUDO3xPg7Q+0W6GuOJBlJ620mb7p7pB8qTuaI
+lrgL5iMCe/j5glcX7oJbtY8MxHfGj4nopZJ2HCim1Wx0LlMgvS55p4tafS7ltaeQ
+K+MEFyKiiQdIdO+EVenan8bV7+iQSAuJJ1H0gwlbYZ7cmXU/8Gv65KPE7iGep0Wu
+kQRqTNWSsXIzLYJ7AhGqn4bGeWgqZr86UlC7hu0pR/bAmj85gavwPfzH6kPI4Q8+
+vQQhwxu7Q9vafnUJk+B7gs/b9FgVjEMWY84wUdI+QKBgQD4jDH71NyxAlNuwSWw
+RBHrG5kKY3zwlGJnfxBBY5WA1gBx2MJSOsK5ZinSUbRhWYOLrWntpxgDH9DkxdBX
+H3nf+r+MNoF2LrKn09Fb8YJmRZunbm6dMAd/dDvrgxKuX6WUsMaCRoQXSSkq+G7U
+a0GMdHrIyK4cD8XcB3R+FAJweQKBgQD1HblFy4LIQmvNBTrTjCMUJVVGkbzFX6WC
+gU6y2WE3k3GH6oRjdFvrlRjiQ3hFr1oAI1ROEO/HQdYfjEWNAh4/kAOyI+JVH751
+dvD4DLd6ZiBy9PqePccICXIWAyYuCEXunfB3GVadBKHTWe609O0m9a1EfvfauPE0
+aETiDmiehQKBgGZ5BrKZVFP2bYegQnWl2u1f93z8/6oAw4GANad/80em84/8mkFk
+0Ju3r05zOTdZvI599Mpytcez+mAX3onNBGZ/7zFT15RuNGJVRl/t9qFL2ZzyPtC3
+2J+HwJyc8brK3G2tZGqZwCQJmduJicgyYFgUPftCIeaX6i+JM1I31bmhAoGAHw/K
+N7cHdrs8D/oWr1I168qjWNMFGfn57mTWhUGY2UMdAv1ME5JeR6dYROwJ5MLI4/WW
+LGJnEFgee1b6RVk8Xg+w+DUl7GWebCJLfROXeLJScF7tF3p6q2EPDQ0PHIw92HQ5
+Uc5rNHCu1SqzXkkfeG1vrJtua1A+eMax2/e5eEUCgYEAiTrYuQj3tqDYJDlqy3kX
+OqTNc+hZnBnJx5LsAphfh6T9B9liot7CE38ezNrovmMJqYcCaDDbz+TC25dbT7qD
+yviEcd+Q4+u5Yguo04+gfp2UC9b6ElRvidOBckzwtjLUyVwQxTxXagpQpdh8XynW
+S80xx+2STMx8HFga4AUSkMY=
+-----END PRIVATE KEY-----""",
     "client_email": "costing-tool-saver@engaged-kite-494709-t7.iam.gserviceaccount.com",
     "client_id": "114472038158489600117",
     "token_uri": "https://oauth2.googleapis.com/token",
 }
 
-# 2. Authenticate
-scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_info(gsheet_creds, scopes=scopes)
-client = gspread.authorize(creds)
-
-# 3. Open the Sheet
-# Use the ID from your URL
-SHEET_ID = "1ZTI3G97SSOcowXJyHpncFFSlGyS5VSLJublqLpAxVIk"
-sh = client.open_by_key(SHEET_ID)
-
-# 4. Helper function to read data
-def load_data(worksheet_name):
-    worksheet = sh.worksheet(worksheet_name)
-    data = worksheet.get_all_records()
-    return pd.DataFrame(data)
-
-# Load your Product Master
+# 2. Authenticate directly
 try:
-    df_master = load_data("Product_Master")
-    st.success("Connected to Google Sheets!")
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(gsheet_creds, scopes=scopes)
+    client = gspread.authorize(creds)
+    
+    # 3. Open the Sheet
+    SHEET_ID = "1ZTI3G97SSOcowXJyHpncFFSlGyS5VSLJublqLpAxVIk"
+    sh = client.open_by_key(SHEET_ID)
 except Exception as e:
-    st.error(f"Failed to load data: {e}")
+    st.error(f"Authentication Failed: {e}")
     st.stop()
-# 3. Rest of your app logic...
+
+# 4. Helper function to load your data
+@st.cache_data(ttl=60)
+def load_products():
+    worksheet = sh.worksheet("Product_Master")
+    return pd.DataFrame(worksheet.get_all_records())
+
+df_master = load_products()
+df_master.columns = df_master.columns.str.strip()
+
+# ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# 3. Rest of your app logic...
 # Rest of your code follows...
 # --- 1. CONFIGURATION & DATA LOADING ---
 def get_csv_url(base_url, gid):
