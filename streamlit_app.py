@@ -2,10 +2,6 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection # Ensure this is imported
 
-import streamlit as st
-from streamlit_gsheets import GSheetsConnection
-import pandas as pd
-
 # 1. Define the credentials directly in a dictionary to bypass TOML parsing issues
 # Replace the placeholders with the actual values from your JSON file
 gsheet_creds = {
