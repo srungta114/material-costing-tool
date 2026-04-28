@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 1. Cleaned Credentials Dictionary
+# 1. Credentials Dictionary (Missing 'b' has been restored!)
 gsheet_creds = {
     "type": "service_account",
     "project_id": "engaged-kite-494709-t7",
@@ -20,7 +20,7 @@ tqUgZwjinhkt6f2Af4GqONVcuh5lUDO3xPg7Q+0W6GuOJBlJ620mb7p7pB8qTuaI
 lrgL5iMCe/j5glcX7oJbtY8MxHfGj4nopZJ2HCim1Wx0LlMgvS55p4tafS7ltaeQ
 K+MEFyKiiQdIdO+EVenan8bV7+iQSAuJJ1H0gwlbYZ7cmXU/8Gv65KPE7iGep0Wu
 kQRqTNWSsXIzLYJ7AhGqn4bGeWgqZr86UlC7hu0pR/bAmj85gavwPfzH6kPI4Q8+
-vQQhwxu7Q9vafnUJk+B7gs/b9FgVjEMWY84wUdI+QKBgQD4jDH71NyxAlNuwSWw
+bvQQhwxu7Q9vafnUJk+B7gs/b9FgVjEMWY84wUdI+QKBgQD4jDH71NyxAlNuwSWw
 RBHrG5kKY3zwlGJnfxBBY5WA1gBx2MJSOsK5ZinSUbRhWYOLrWntpxgDH9DkxdBX
 H3nf+r+MNoF2LrKn09Fb8YJmRZunbm6dMAd/dDvrgxKuX6WUsMaCRoQXSSkq+G7U
 a0GMdHrIyK4cD8XcB3R+FAJweQKBgQD1HblFy4LIQmvNBTrTjCMUJVVGkbzFX6WC
@@ -63,8 +63,7 @@ def load_products():
 df_master = load_products()
 df_master.columns = df_master.columns.str.strip()
 
-# ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# 3. Rest of your app logic...
-# Rest of your code follows...
+# ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# Rest of your code follows...
 # --- 1. CONFIGURATION & DATA LOADING ---
 def get_csv_url(base_url, gid):
     # Converts the standard sheet URL into a direct CSV export for a specific tab
