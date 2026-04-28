@@ -25,7 +25,11 @@ def load_products():
         return pd.DataFrame()
 
 df_master = load_products()
+# This code automatically removes accidental spaces and fixes naming issues
+df_master.columns = df_master.columns.str.strip() 
 
+# Show the columns on the screen so you can verify them if it still fails
+# st.write(df_master.columns.tolist())
 st.title("📑 Multi-Item Material Costing Tool")
 
 # --- SESSION STATE FOR MULTIPLE ITEMS ---
