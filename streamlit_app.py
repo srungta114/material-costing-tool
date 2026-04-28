@@ -117,7 +117,17 @@ if 'bill_items' not in st.session_state:
 st.header("1. Bill Details")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
-    seller_name = c1.text_input("Seller Company Name")
+    
+    # Smart Dropdown Logic
+    seller_options = ["➕ Add New Seller..."] + existing_sellers
+    selected_seller = c1.selectbox("Seller Company Name", seller_options)
+    
+    # If they choose to add a new one, show a text input box below it
+    if selected_seller == "➕ Add New Seller...":
+        seller_name = c1.text_input("Type New Seller Name Here")
+    else:
+        seller_name = selected_seller
+        
     bill_no = c2.text_input("Bill No.")
     purchase_date = c3.date_input("Purchase Date")
 
