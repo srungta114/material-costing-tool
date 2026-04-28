@@ -1,15 +1,25 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# 1. Connection Setup
-conn = st.connection("gsheets", type=GSheetsConnection)
+# This bypasses the gsheets connection library for reading
+# It converts your Google Sheet URL into a direct CSV download link
+def get_csv_url(base_url):
+    if "/edit" in base_url:
+        return base_url.split("/edit")[0] + "/export?format=csv&gid=0"
+    return base_url
 
-# 2. Load Product Master (Tab 2 of your Google Sheet)
-# Ensure your sheet has a tab named 'Product_Master'
+# Load Secrets
+sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+csv_url = get_csv_url(sheet_url)
+
 @st.cache_data(ttl=600)
 def load_products():
-    return conn.read(worksheet="Product_Master")
+    # We add a try-block to catch the exact error
+    try:
+        return pd.read_csv(csv_url)
+    except Exception as e:
+        st.error(f"Failed to connect to Google Sheets. Error: {e}")
+        return pd.DataFrame()
 
 df_master = load_products()
 
