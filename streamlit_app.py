@@ -63,22 +63,24 @@ def load_products():
 df_master = load_products()
 df_master.columns = df_master.columns.str.strip()
 
-# --- ADD THIS NEW FUNCTION ---
+# --- UPGRADED DATA LOADER ---
 @st.cache_data(ttl=60)
-def load_sellers():
+def load_purchases_data():
     try:
         purchases_sheet = sh.worksheet("Purchases")
         df_purchases = pd.DataFrame(purchases_sheet.get_all_records())
-        # Check if the column exists and extract unique names
-        if 'Seller' in df_purchases.columns:
-            # Get unique, non-empty sellers
-            sellers = df_purchases['Seller'].dropna().unique().tolist()
-            return sorted([str(s).strip() for s in sellers if str(s).strip() != ""])
-        return []
+        return df_purchases
     except Exception:
-        return []
+        return pd.DataFrame() # Returns empty if the sheet doesn't exist yet
 
-existing_sellers = load_sellers()
+# Load the historical database once
+df_purchases = load_purchases_data()
+
+# Extract unique sellers for the dropdown
+if not df_purchases.empty and 'Seller' in df_purchases.columns:
+    existing_sellers = sorted([str(s).strip() for s in df_purchases['Seller'].dropna().unique() if str(s).strip() != ""])
+else:
+    existing_sellers = []
 # -----------------------------
 
 # ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# Rest of your code follows...
@@ -112,7 +114,30 @@ st.title("🏗️ Material Costing & Inventory Ledger")
 # --- 2. SESSION STATE FOR MULTI-ITEM BILLS ---
 if 'bill_items' not in st.session_state:
     st.session_state.bill_items = []
+# --- QUICK COSTING SEARCH ---
+st.header("🔍 Quick Costing Search")
+with st.expander("Search Master Database", expanded=False): # Hidden by default to save space
+    if not df_purchases.empty and 'Material' in df_purchases.columns:
+        # Get a clean, alphabetical list of all materials currently in the sheet
+        search_materials = sorted(df_purchases['Material'].dropna().unique().tolist())
+        search_selection = st.selectbox("Type or select a material to view its latest costing:", ["-- Select Material --"] + search_materials)
+        
+        if search_selection != "-- Select Material --":
+            # Find the exact row for this material
+            item_data = df_purchases[df_purchases['Material'] == search_selection].iloc[-1]
+            
+            st.info(f"**Supplier:** {item_data.get('Seller', 'N/A')} | **Bill No:** {item_data.get('Bill_No', 'N/A')} | **Date:** {item_data.get('Date', 'N/A')}")
+            
+            # Display metrics in a clean row
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Landed Cost (Purchase Unit)", f"{item_data.get('Landed_Rate_Purchase', 0):.2f} / {item_data.get('Unit_Purchase', '')}")
+            m2.metric("Cost per Sales Unit", f"{item_data.get('Cost_Pc', 0):.2f} / {item_data.get('Unit_Sales', '')}")
+            m3.metric("Last Qty Bought", f"{item_data.get('Qty_Purchase', 0)} {item_data.get('Unit_Purchase', '')}")
+            m4.metric("Base Rate (Pre-Tax)", f"{item_data.get('Rate_Purchase', 0):.2f}")
+    else:
+        st.write("No costings saved yet. Add a bill below to start building your database!")
 
+st.divider() # Adds a nice visual line to separate the search from the data entry
 # --- 3. BILL HEADER (Seller Info) ---
 st.header("1. Bill Details")
 with st.container(border=True):
