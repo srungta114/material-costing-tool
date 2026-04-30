@@ -261,21 +261,41 @@ if st.session_state.bill_items:
     
     st.metric("Total Bill Amount (Incl. 13% VAT)", f"{df_bill['Total_Item_Cost'].sum():,.2f}")
 
-    if st.button("💾 Save Final Bill to Sheets"):
+    if st.button("💾 Save Final Bill & Update Costings"):
         try:
             # 1. Target your specific 'Purchases' tab
-            # Ensure your Google Sheet has a tab named exactly this!
             purchases_sheet = sh.worksheet("Purchases")
             
-            # 2. Convert the pandas DataFrame into a raw list of lists
-            # We fill any empty cells with blank text so Google Sheets doesn't crash
-            df_bill_clean = df_bill.fillna("")
-            data_to_append = df_bill_clean.values.tolist()
+            # 2. Fetch the existing data from Google Sheets
+            existing_data = purchases_sheet.get_all_records()
+            df_existing = pd.DataFrame(existing_data)
             
-            # 3. Append the rows instantly to the bottom of the sheet
-            purchases_sheet.append_rows(data_to_append)
+            # 3. Get the new entries from the current bill
+            df_new = pd.DataFrame(st.session_state.bill_items)
             
-            st.success("✅ Bill successfully recorded in Google Sheets!")
+            # 4. Combine them and overwrite old entries
+            if not df_existing.empty:
+                # Stack the new data below the old data
+                df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                
+                # Drop duplicates based on the 'Material' column. 
+                # keep='last' ensures the NEWEST entry survives and the old one is deleted.
+                df_combined = df_combined.drop_duplicates(subset=['Material'], keep='last')
+            else:
+                # If the sheet was totally empty, just use the new data
+                df_combined = df_new
+                
+            # 5. Clean the data (Google Sheets crashes if it sees 'NaN' instead of blanks)
+            df_combined_clean = df_combined.fillna("")
+            
+            # Convert the final clean DataFrame back into a list of lists for Google Sheets
+            data_to_write = [df_combined_clean.columns.values.tolist()] + df_combined_clean.values.tolist()
+            
+            # 6. Wipe the old sheet clean and upload the master list
+            purchases_sheet.clear() 
+            purchases_sheet.update(values=data_to_write, range_name="A1")
+            
+            st.success("✅ Sheet updated! Old costings were removed and new costings were saved.")
             st.balloons()
             st.session_state.bill_items = [] # Clear the app memory for the next bill
             st.rerun()
