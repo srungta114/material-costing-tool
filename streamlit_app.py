@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="Material Costing", layout="wide")
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
