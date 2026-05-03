@@ -178,7 +178,8 @@ with st.container(border=True):
         sub_group = item_info['Sub-Group']
         p_unit = item_info['Purchase_Unit']
         s_unit = item_info['Sales_Unit']
-       try:
+        
+        try:
             conv_fact = float(item_info['Conversion_Factor'])
         except (ValueError, TypeError):
             conv_fact = 1.0
