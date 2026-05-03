@@ -128,17 +128,29 @@ with st.expander("Search Master Database", expanded=False):
             st.info(f"**Supplier:** {item_data.get('Seller', 'N/A')} | **Bill No:** {item_data.get('Bill_No', 'N/A')} | **Date:** {item_data.get('Date', 'N/A')}")
             
             # --- PRE-TAX MATH ---
-            # Landed rate includes overheads, discounts, AND 13% VAT.
-            # We divide by 1.13 to show the true cost right before tax was applied.
             landed_rate = float(item_data.get('Landed_Rate_Purchase', 0))
-            true_pre_tax = landed_rate / 1.13
+            true_pre_tax_purchase = landed_rate / 1.13
             
-            # Display metrics
-            m1, m2, m3, m4 = st.columns(4)
+            cost_pc = float(item_data.get('Cost_Pc', 0))
+            sales_unit = str(item_data.get('Unit_Sales', '')).strip()
+            
+            # Check if the sales unit is a variation of "pieces"
+            is_pcs = sales_unit.lower() in ['pcs', 'pc', 'piece', 'pieces']
+            
+            # Dynamically create 5 columns if it's pieces, otherwise 4
+            if is_pcs:
+                m1, m2, m3, m4, m5 = st.columns(5)
+                pre_tax_pc = cost_pc / 1.13
+                m5.metric("Pre-Tax (Sales Unit)", f"{pre_tax_pc:.2f} / {sales_unit}")
+            else:
+                m1, m2, m3, m4 = st.columns(4)
+                
+            # Display standard metrics
             m1.metric("Landed Cost (Purchase Unit)", f"{landed_rate:.2f} / {item_data.get('Unit_Purchase', '')}")
-            m2.metric("Cost per Sales Unit", f"{float(item_data.get('Cost_Pc', 0)):.2f} / {item_data.get('Unit_Sales', '')}")
+            m2.metric("Cost per Sales Unit", f"{cost_pc:.2f} / {sales_unit}")
             m3.metric("Last Qty Bought", f"{item_data.get('Qty_Purchase', 0)} {item_data.get('Unit_Purchase', '')}")
-            m4.metric("Pre-Tax Rate", f"{true_pre_tax:.2f}")
+            m4.metric("Pre-Tax (Purchase Unit)", f"{true_pre_tax_purchase:.2f}")
+            
     else:
         st.write("No costings saved yet. Add a bill below to start building your database!")
 
