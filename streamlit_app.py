@@ -123,39 +123,57 @@ with st.expander("Search Master Database", expanded=False):
         search_selection = st.selectbox("Type or select a material to view its latest costing:", ["-- Select Material --"] + search_materials)
         
         if search_selection != "-- Select Material --":
-            # Find the exact row for this material
             item_data = df_purchases[df_purchases['Material'] == search_selection].iloc[-1]
             
             st.info(f"**Supplier:** {item_data.get('Seller', 'N/A')} | **Bill No:** {item_data.get('Bill_No', 'N/A')} | **Date:** {item_data.get('Date', 'N/A')}")
             
-            # --- PRE-TAX MATH ---
+            # --- MATH & PARSING ---
             landed_rate = float(item_data.get('Landed_Rate_Purchase', 0))
             true_pre_tax_purchase = landed_rate / 1.13
-            
             cost_pc = float(item_data.get('Cost_Pc', 0))
+            
+            # Safely fetch units and quantities
+            purch_unit = str(item_data.get('Unit_Purchase', '')).strip()
             sales_unit = str(item_data.get('Unit_Sales', '')).strip()
+            qty_p = float(item_data.get('Qty_Purchase', 0))
+            qty_s = float(item_data.get('Qty_Sales', 1)) # Default to 1 to prevent division by zero
             
-            # Check if the sales unit is a variation of "pieces"
+            # Smart Unit Detectors
             is_pcs = sales_unit.lower() in ['pcs', 'pc', 'piece', 'pieces']
+            is_kg = purch_unit.lower() in ['kg', 'kgs', 'kilogram', 'kilograms']
             
-            # Dynamically create 5 columns if it's pieces, otherwise 4
+            # --- ROW 1: THE MAIN 3 METRICS ---
+            r1_c1, r1_c2, r1_c3 = st.columns(3)
+            r1_c1.metric("Landed Cost (Purchase Unit)", f"{landed_rate:.2f} / {purch_unit}")
+            r1_c2.metric("Cost per Sales Unit", f"{cost_pc:.2f} / {sales_unit}")
+            r1_c3.metric("Last Qty Bought", f"{qty_p} {purch_unit}")
+            
+            st.write("") # Add vertical spacing
+            
+            # --- ROW 2: DYNAMIC PRE-TAX & WEIGHT METRICS ---
+            # We build a list of metrics so Streamlit only creates the exact number of columns needed
+            row_2_metrics = []
+            row_2_metrics.append(("Pre-Tax (Purchase Unit)", f"{true_pre_tax_purchase:.2f}"))
+            
             if is_pcs:
-                m1, m2, m3, m4, m5 = st.columns(5)
                 pre_tax_pc = cost_pc / 1.13
-                m5.metric("Pre-Tax (Sales Unit)", f"{pre_tax_pc:.2f} / {sales_unit}")
-            else:
-                m1, m2, m3, m4 = st.columns(4)
+                row_2_metrics.append(("Pre-Tax (Sales Unit)", f"{pre_tax_pc:.2f} / {sales_unit}"))
                 
-            # Display standard metrics
-            m1.metric("Landed Cost (Purchase Unit)", f"{landed_rate:.2f} / {item_data.get('Unit_Purchase', '')}")
-            m2.metric("Cost per Sales Unit", f"{cost_pc:.2f} / {sales_unit}")
-            m3.metric("Last Qty Bought", f"{item_data.get('Qty_Purchase', 0)} {item_data.get('Unit_Purchase', '')}")
-            m4.metric("Pre-Tax (Purchase Unit)", f"{true_pre_tax_purchase:.2f}")
-            
+            if is_pcs and is_kg and qty_s > 0:
+                weight_per_pc = qty_p / qty_s
+                # We format this to 3 decimal places so even small weights (e.g., 0.125 kg) show accurately
+                row_2_metrics.append(("Weight per Piece", f"{weight_per_pc:.3f} {purch_unit}"))
+                
+            # Automatically render the correct number of columns for Row 2
+            r2_cols = st.columns(len(row_2_metrics))
+            for idx, (label, value) in enumerate(row_2_metrics):
+                r2_cols[idx].metric(label, value)
+                
     else:
         st.write("No costings saved yet. Add a bill below to start building your database!")
 
 st.divider()
+
 # --- 3. BILL HEADER (Seller Info) ---
 st.header("1. Bill Details")
 with st.container(border=True):
