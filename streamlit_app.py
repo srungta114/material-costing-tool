@@ -178,7 +178,10 @@ with st.container(border=True):
         sub_group = item_info['Sub-Group']
         p_unit = item_info['Purchase_Unit']
         s_unit = item_info['Sales_Unit']
-        conv_fact = item_info['Conversion_Factor']
+       try:
+            conv_fact = float(item_info['Conversion_Factor'])
+        except (ValueError, TypeError):
+            conv_fact = 1.0
 
         st.write(f"**Classification:** {group} > {sub_group}")
         st.info(f"**Unit Logic:** Purchased in {p_unit} | Sales tracked in {s_unit}")
