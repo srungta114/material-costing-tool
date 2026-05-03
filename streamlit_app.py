@@ -4,7 +4,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 1. Credentials Dictionary (Missing 'b' has been restored!)
+# --- 1. CREDENTIALS & AUTHENTICATION ---
 gsheet_creds = {
     "type": "service_account",
     "project_id": "engaged-kite-494709-t7",
@@ -42,80 +42,54 @@ S80xx+2STMx8HFga4AUSkMY=
     "token_uri": "https://oauth2.googleapis.com/token",
 }
 
-# 2. Authenticate directly
 try:
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(gsheet_creds, scopes=scopes)
     client = gspread.authorize(creds)
-    
-    # 3. Open the Sheet
     SHEET_ID = "1ZTI3G97SSOcowXJyHpncFFSlGyS5VSLJublqLpAxVIk"
     sh = client.open_by_key(SHEET_ID)
 except Exception as e:
     st.error(f"Authentication Failed: {e}")
     st.stop()
 
-# 4. Helper function to load your data
+
+# --- 2. SECURE DATA LOADERS ---
 @st.cache_data(ttl=60)
 def load_products():
-    worksheet = sh.worksheet("Product_Master")
-    return pd.DataFrame(worksheet.get_all_records())
+    try:
+        worksheet = sh.worksheet("Product_Master")
+        df = pd.DataFrame(worksheet.get_all_records())
+        df.columns = df.columns.str.strip()
+        return df
+    except Exception as e:
+        st.error(f"Failed to load Product Master: {e}")
+        return pd.DataFrame()
 
-df_master = load_products()
-df_master.columns = df_master.columns.str.strip()
-
-# --- UPGRADED DATA LOADER ---
 @st.cache_data(ttl=60)
 def load_purchases_data():
     try:
         purchases_sheet = sh.worksheet("Purchases")
-        df_purchases = pd.DataFrame(purchases_sheet.get_all_records())
-        return df_purchases
+        return pd.DataFrame(purchases_sheet.get_all_records())
     except Exception:
-        return pd.DataFrame() # Returns empty if the sheet doesn't exist yet
+        return pd.DataFrame() 
 
-# Load the historical database once
+df_master = load_products()
 df_purchases = load_purchases_data()
 
-# Extract unique sellers for the dropdown
+# Extract unique sellers
 if not df_purchases.empty and 'Seller' in df_purchases.columns:
     existing_sellers = sorted([str(s).strip() for s in df_purchases['Seller'].dropna().unique() if str(s).strip() != ""])
 else:
     existing_sellers = []
-# -----------------------------
 
-# ---- REST OF YOUR APP UI CODE GOES BELOW THIS LINE ----# Rest of your code follows...
-# --- 1. CONFIGURATION & DATA LOADING ---
-def get_csv_url(base_url, gid):
-    # Converts the standard sheet URL into a direct CSV export for a specific tab
-    if "/edit" in base_url:
-        return base_url.split("/edit")[0] + f"/export?format=csv&gid={gid}"
-    return base_url
-
-# Replace these with your actual values
-SHEET_URL = st.secrets["connections"]["gsheets"]["spreadsheet"]
-PRODUCT_MASTER_GID = "573342116"  # <--- UPDATE THIS GID FROM YOUR BROWSER URL
-
-@st.cache_data(ttl=60)
-def load_products():
-    csv_url = get_csv_url(SHEET_URL, PRODUCT_MASTER_GID)
-    df = pd.read_csv(csv_url)
-    # Clean up column headers (removes hidden spaces)
-    df.columns = df.columns.str.strip()
-    return df
-
-try:
-    df_master = load_products()
-except Exception as e:
-    st.error(f"Error loading Product Master: {e}")
-    st.stop()
+# Initialize Session State
+if 'bill_items' not in st.session_state:
+    st.session_state.bill_items = []
 
 st.title("🏗️ Material  & Inventory Ledger")
 
-# --- 2. SESSION STATE FOR MULTI-ITEM BILLS ---
-if 'bill_items' not in st.session_state:
-    st.session_state.bill_items = []
-# --- QUICK COSTING SEARCH ---
+
+# --- 3. QUICK COSTING SEARCH ---
 st.header("🔍 Quick Costing Search")
 with st.expander("Search Master Database", expanded=False): 
     if not df_purchases.empty and 'Material' in df_purchases.columns:
@@ -127,31 +101,28 @@ with st.expander("Search Master Database", expanded=False):
             
             st.info(f"**Supplier:** {item_data.get('Seller', 'N/A')} | **Bill No:** {item_data.get('Bill_No', 'N/A')} | **Date:** {item_data.get('Date', 'N/A')}")
             
-            # --- MATH & PARSING ---
+            # Math & Parsing
             landed_rate = float(item_data.get('Landed_Rate_Purchase', 0))
             true_pre_tax_purchase = landed_rate / 1.13
             cost_pc = float(item_data.get('Cost_Pc', 0))
             
-            # Safely fetch units and quantities
             purch_unit = str(item_data.get('Unit_Purchase', '')).strip()
             sales_unit = str(item_data.get('Unit_Sales', '')).strip()
             qty_p = float(item_data.get('Qty_Purchase', 0))
-            qty_s = float(item_data.get('Qty_Sales', 1)) # Default to 1 to prevent division by zero
+            qty_s = float(item_data.get('Qty_Sales', 1)) 
             
-            # Smart Unit Detectors
             is_pcs = sales_unit.lower() in ['pcs', 'pc', 'piece', 'pieces']
             is_kg = purch_unit.lower() in ['kg', 'kgs', 'kilogram', 'kilograms']
             
-            # --- ROW 1: THE MAIN 3 METRICS ---
+            # Row 1
             r1_c1, r1_c2, r1_c3 = st.columns(3)
             r1_c1.metric("Landed Cost (Purchase Unit)", f"{landed_rate:.2f} / {purch_unit}")
             r1_c2.metric("Cost per Sales Unit", f"{cost_pc:.2f} / {sales_unit}")
             r1_c3.metric("Last Qty Bought", f"{qty_p} {purch_unit}")
             
-            st.write("") # Add vertical spacing
+            st.write("") 
             
-            # --- ROW 2: DYNAMIC PRE-TAX & WEIGHT METRICS ---
-            # We build a list of metrics so Streamlit only creates the exact number of columns needed
+            # Row 2
             row_2_metrics = []
             row_2_metrics.append(("Pre-Tax (Purchase Unit)", f"{true_pre_tax_purchase:.2f}"))
             
@@ -161,10 +132,8 @@ with st.expander("Search Master Database", expanded=False):
                 
             if is_pcs and is_kg and qty_s > 0:
                 weight_per_pc = qty_p / qty_s
-                # We format this to 3 decimal places so even small weights (e.g., 0.125 kg) show accurately
                 row_2_metrics.append(("Weight per Piece", f"{weight_per_pc:.3f} {purch_unit}"))
                 
-            # Automatically render the correct number of columns for Row 2
             r2_cols = st.columns(len(row_2_metrics))
             for idx, (label, value) in enumerate(row_2_metrics):
                 r2_cols[idx].metric(label, value)
@@ -174,16 +143,15 @@ with st.expander("Search Master Database", expanded=False):
 
 st.divider()
 
-# --- 3. BILL HEADER (Seller Info) ---
+
+# --- 4. BILL HEADER ---
 st.header("1. Bill Details")
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
     
-    # Smart Dropdown Logic
     seller_options = ["➕ Add New Seller..."] + existing_sellers
     selected_seller = c1.selectbox("Seller Company Name", seller_options)
     
-    # If they choose to add a new one, show a text input box below it
     if selected_seller == "➕ Add New Seller...":
         seller_name = c1.text_input("Type New Seller Name Here")
     else:
@@ -192,129 +160,120 @@ with st.container(border=True):
     bill_no = c2.text_input("Bill No.")
     purchase_date = c3.date_input("Purchase Date")
 
-# --- 4. ITEM ENTRY (Auto-Selection Logic) ---
+
+# --- 5. ITEM ENTRY ---
 st.header("2. Add Material")
 with st.container(border=True):
-    # User selects Item Name first
-    product_list = sorted(df_master['Item_Name'].unique())
+    if not df_master.empty and 'Item_Name' in df_master.columns:
+        product_list = sorted(df_master['Item_Name'].unique())
+    else:
+        product_list = ["-- No Products Found --"]
+
     selected_product = st.selectbox("Select Product", product_list)
 
-    # Automatically find the metadata for the selected item
-    item_info = df_master[df_master['Item_Name'] == selected_product].iloc[0]
-    
-    group = item_info['Group']
-    sub_group = item_info['Sub-Group']
-    p_unit = item_info['Purchase_Unit']
-    s_unit = item_info['Sales_Unit']
-    conv_fact = item_info['Conversion_Factor']
-
-    # Display the auto-selected Group and Sub-Group
-    st.write(f"**Classification:** {group} > {sub_group}")
-    st.info(f"**Unit Logic:** Purchased in {p_unit} | Sales tracked in {s_unit}")
-
-    # Costing Inputs
-    i1, i2, i3 = st.columns(3)
-    qty_p = i1.number_input(f"Total Quantity ({p_unit})", min_value=0.0, step=0.1)
-    rate_p = i2.number_input(f"Purchase Rate (per {p_unit})", min_value=0.0)
-    
-    # Auto-calculate suggested sales quantity
-    qty_s = i3.number_input(f"Calculated Qty ({s_unit})", value=float(qty_p * conv_fact))
-
-    st.write("---")
-    st.caption("Additional Costs & Discounts (Calculated per Purchase Unit)")
-    f1, f2, f3 = st.columns(3)
-    excise = f1.number_input("Excise Duty", min_value=0.0)
-    trans = f2.number_input("Transport Cost", min_value=0.0)
-    labour = f3.number_input("Labour Cost", min_value=0.0)
-    
-    d1, d2 = st.columns(2)
-    d_type = d1.selectbox("Discount Type", ["None", "Per Unit", "Percentage (%)"])
-    d_val = d2.number_input("Discount Value", min_value=0.0)
-
-    if st.button("➕ Add Item to Bill"):
-        # 1. Base Cost Calculation for the CURRENT entry
-        base_rate = rate_p + excise + trans + labour
+    if selected_product != "-- No Products Found --":
+        item_info = df_master[df_master['Item_Name'] == selected_product].iloc[0]
         
-        if d_type == "Per Unit":
-            taxable = base_rate - d_val
-        elif d_type == "Percentage (%)":
-            taxable = base_rate * (1 - (d_val/100))
-        else:
-            taxable = base_rate
+        group = item_info['Group']
+        sub_group = item_info['Sub-Group']
+        p_unit = item_info['Purchase_Unit']
+        s_unit = item_info['Sales_Unit']
+        conv_fact = item_info['Conversion_Factor']
+
+        st.write(f"**Classification:** {group} > {sub_group}")
+        st.info(f"**Unit Logic:** Purchased in {p_unit} | Sales tracked in {s_unit}")
+
+        i1, i2, i3 = st.columns(3)
+        qty_p = i1.number_input(f"Total Quantity ({p_unit})", min_value=0.0, step=0.1)
+        rate_p = i2.number_input(f"Purchase Rate (per {p_unit})", min_value=0.0)
+        qty_s = i3.number_input(f"Calculated Qty ({s_unit})", value=float(qty_p * conv_fact))
+
+        st.write("---")
+        st.caption("Additional Costs & Discounts (Calculated per Purchase Unit)")
+        f1, f2, f3 = st.columns(3)
+        excise = f1.number_input("Excise Duty", min_value=0.0)
+        trans = f2.number_input("Transport Cost", min_value=0.0)
+        labour = f3.number_input("Labour Cost", min_value=0.0)
         
-        landed_rate_p = taxable * 1.13 # 13% Fixed VAT
-        total_item_val = landed_rate_p * qty_p
-        cost_per_s_unit = total_item_val / qty_s if qty_s > 0 else 0
+        d1, d2 = st.columns(2)
+        d_type = d1.selectbox("Discount Type", ["None", "Per Unit", "Percentage (%)"])
+        d_val = d2.number_input("Discount Value", min_value=0.0)
 
-        # 2. Check if this product is already in the current bill
-        existing_item_index = None
-        for i, item in enumerate(st.session_state.bill_items):
-            if item["Material"] == selected_product:
-                existing_item_index = i
-                break
-
-        if existing_item_index is not None:
-            # --- MERGE LOGIC ---
-            # Remove the old entry from the list
-            old_item = st.session_state.bill_items.pop(existing_item_index)
+        if st.button("➕ Add Item to Bill"):
+            base_rate = rate_p + excise + trans + labour
             
-            # Combine Quantities and Total Costs
-            new_qty_p = old_item["Qty_Purchase"] + qty_p
-            new_qty_s = old_item["Qty_Sales"] + qty_s
-            new_total_cost = old_item["Total_Item_Cost"] + total_item_val
+            if d_type == "Per Unit":
+                taxable = base_rate - d_val
+            elif d_type == "Percentage (%)":
+                taxable = base_rate * (1 - (d_val/100))
+            else:
+                taxable = base_rate
             
-            # Calculate the new Weighted Average Rates
-            avg_landed_rate = new_total_cost / new_qty_p if new_qty_p > 0 else 0
-            avg_cost_pc = new_total_cost / new_qty_s if new_qty_s > 0 else 0
+            landed_rate_p = taxable * 1.13 
+            total_item_val = landed_rate_p * qty_p
+            cost_per_s_unit = total_item_val / qty_s if qty_s > 0 else 0
 
-            # Add the merged entry back into the list
-            st.session_state.bill_items.append({
-                "Seller": seller_name,
-                "Bill_No": bill_no,
-                "Date": str(purchase_date),
-                "Group": group,
-                "Sub-Group": sub_group,
-                "Material": selected_product,
-                "Qty_Purchase": new_qty_p,
-                "Unit_Purchase": p_unit,
-                "Qty_Sales": new_qty_s,
-                "Unit_Sales": s_unit,
-                # For visual records, we average the input rates, but financial totals rely on the weighted landed rate
-                "Rate_Purchase": round((old_item["Rate_Purchase"] + rate_p) / 2, 2), 
-                "Excise_Kg": round((old_item["Excise_Kg"] + excise) / 2, 2),
-                "Transport_Kg": round((old_item["Transport_Kg"] + trans) / 2, 2),
-                "Labour_Kg": round((old_item["Labour_Kg"] + labour) / 2, 2),
-                "Landed_Rate_Purchase": round(avg_landed_rate, 2),
-                "Cost_Pc": round(avg_cost_pc, 2),
-                "Total_Item_Cost": round(new_total_cost, 2)
-            })
-            st.success(f"🔄 Merged {selected_product} with previous entry. Applied weighted average cost.")
-            
-        else:
-            # --- NEW ITEM LOGIC ---
-            # Add as a fresh entry if it doesn't exist yet
-            st.session_state.bill_items.append({
-                "Seller": seller_name,
-                "Bill_No": bill_no,
-                "Date": str(purchase_date),
-                "Group": group,
-                "Sub-Group": sub_group,
-                "Material": selected_product,
-                "Qty_Purchase": qty_p,
-                "Unit_Purchase": p_unit,
-                "Qty_Sales": qty_s,
-                "Unit_Sales": s_unit,
-                "Rate_Purchase": rate_p,
-                "Excise_Kg": excise,
-                "Transport_Kg": trans,
-                "Labour_Kg": labour,
-                "Landed_Rate_Purchase": round(landed_rate_p, 2),
-                "Cost_Pc": round(cost_per_s_unit, 2),
-                "Total_Item_Cost": round(total_item_val, 2)
-            })
-            st.success(f"➕ Added {selected_product} to bill.")
+            existing_item_index = None
+            for i, item in enumerate(st.session_state.bill_items):
+                if item["Material"] == selected_product:
+                    existing_item_index = i
+                    break
 
-# --- 5. REVIEW AND SAVE ---
+            if existing_item_index is not None:
+                old_item = st.session_state.bill_items.pop(existing_item_index)
+                
+                new_qty_p = old_item["Qty_Purchase"] + qty_p
+                new_qty_s = old_item["Qty_Sales"] + qty_s
+                new_total_cost = old_item["Total_Item_Cost"] + total_item_val
+                
+                avg_landed_rate = new_total_cost / new_qty_p if new_qty_p > 0 else 0
+                avg_cost_pc = new_total_cost / new_qty_s if new_qty_s > 0 else 0
+
+                st.session_state.bill_items.append({
+                    "Seller": seller_name,
+                    "Bill_No": bill_no,
+                    "Date": str(purchase_date),
+                    "Group": group,
+                    "Sub-Group": sub_group,
+                    "Material": selected_product,
+                    "Qty_Purchase": new_qty_p,
+                    "Unit_Purchase": p_unit,
+                    "Qty_Sales": new_qty_s,
+                    "Unit_Sales": s_unit,
+                    "Rate_Purchase": round((old_item["Rate_Purchase"] + rate_p) / 2, 2), 
+                    "Excise_Kg": round((old_item["Excise_Kg"] + excise) / 2, 2),
+                    "Transport_Kg": round((old_item["Transport_Kg"] + trans) / 2, 2),
+                    "Labour_Kg": round((old_item["Labour_Kg"] + labour) / 2, 2),
+                    "Landed_Rate_Purchase": round(avg_landed_rate, 2),
+                    "Cost_Pc": round(avg_cost_pc, 2),
+                    "Total_Item_Cost": round(new_total_cost, 2)
+                })
+                st.success(f"🔄 Merged {selected_product} with previous entry. Applied weighted average cost.")
+                
+            else:
+                st.session_state.bill_items.append({
+                    "Seller": seller_name,
+                    "Bill_No": bill_no,
+                    "Date": str(purchase_date),
+                    "Group": group,
+                    "Sub-Group": sub_group,
+                    "Material": selected_product,
+                    "Qty_Purchase": qty_p,
+                    "Unit_Purchase": p_unit,
+                    "Qty_Sales": qty_s,
+                    "Unit_Sales": s_unit,
+                    "Rate_Purchase": rate_p,
+                    "Excise_Kg": excise,
+                    "Transport_Kg": trans,
+                    "Labour_Kg": labour,
+                    "Landed_Rate_Purchase": round(landed_rate_p, 2),
+                    "Cost_Pc": round(cost_per_s_unit, 2),
+                    "Total_Item_Cost": round(total_item_val, 2)
+                })
+                st.success(f"➕ Added {selected_product} to bill.")
+
+
+# --- 6. REVIEW AND SAVE ---
 if st.session_state.bill_items:
     st.header("3. Bill Review")
     df_bill = pd.DataFrame(st.session_state.bill_items)
@@ -324,41 +283,26 @@ if st.session_state.bill_items:
 
     if st.button("💾 Save Final Bill & Update Costings"):
         try:
-            # 1. Target your specific 'Purchases' tab
             purchases_sheet = sh.worksheet("Purchases")
-            
-            # 2. Fetch the existing data from Google Sheets
             existing_data = purchases_sheet.get_all_records()
             df_existing = pd.DataFrame(existing_data)
-            
-            # 3. Get the new entries from the current bill
             df_new = pd.DataFrame(st.session_state.bill_items)
             
-            # 4. Combine them and overwrite old entries
             if not df_existing.empty:
-                # Stack the new data below the old data
                 df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-                
-                # Drop duplicates based on the 'Material' column. 
-                # keep='last' ensures the NEWEST entry survives and the old one is deleted.
                 df_combined = df_combined.drop_duplicates(subset=['Material'], keep='last')
             else:
-                # If the sheet was totally empty, just use the new data
                 df_combined = df_new
                 
-            # 5. Clean the data (Google Sheets crashes if it sees 'NaN' instead of blanks)
             df_combined_clean = df_combined.fillna("")
-            
-            # Convert the final clean DataFrame back into a list of lists for Google Sheets
             data_to_write = [df_combined_clean.columns.values.tolist()] + df_combined_clean.values.tolist()
             
-            # 6. Wipe the old sheet clean and upload the master list
             purchases_sheet.clear() 
             purchases_sheet.update(values=data_to_write, range_name="A1")
             
             st.success("✅ Sheet updated! Old costings were removed and new costings were saved.")
             st.balloons()
-            st.session_state.bill_items = [] # Clear the app memory for the next bill
+            st.session_state.bill_items = [] 
             st.rerun()
             
         except Exception as e:
