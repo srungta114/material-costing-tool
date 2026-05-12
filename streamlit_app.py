@@ -160,6 +160,20 @@ with st.container(border=True):
     bill_no = c2.text_input("Bill No.")
     purchase_date = c3.date_input("Purchase Date")
 
+# --- DUPLICATE BILL CHECK ---
+is_duplicate_bill = False
+if not df_purchases.empty and seller_name and bill_no:
+    # Clean the text to ignore accidental spaces or capitalization differences (e.g., "123 " == "123")
+    clean_seller = str(seller_name).strip().lower()
+    clean_bill = str(bill_no).strip().lower()
+    
+    # Scan the database for a matching Seller AND Bill Number
+    mask_seller = df_purchases['Seller'].astype(str).str.strip().str.lower() == clean_seller
+    mask_bill = df_purchases['Bill_No'].astype(str).str.strip().str.lower() == clean_bill
+    
+    if (mask_seller & mask_bill).any():
+        is_duplicate_bill = True
+        st.error(f"🛑 **Duplicate Detected:** Bill No. '{bill_no}' from '{seller_name}' already exists in the database. Entry is locked.")
 
 # --- 5. ITEM ENTRY ---
 st.header("2. Add Material")
@@ -203,7 +217,15 @@ with st.container(border=True):
         d_type = d1.selectbox("Discount Type", ["None", "Per Unit", "Percentage (%)"])
         d_val = d2.number_input("Discount Value", min_value=0.0)
 
-        if st.button("➕ Add Item to Bill"):
+       d1, d2 = st.columns(2)
+        d_type = d1.selectbox("Discount Type", ["None", "Per Unit", "Percentage (%)"])
+        d_val = d2.number_input("Discount Value", min_value=0.0)
+
+        # Disable the button if the smart detector triggered a duplicate
+        if st.button("➕ Add Item to Bill", disabled=is_duplicate_bill):
+            base_rate = rate_p + excise + trans + labour
+            
+            # ... (The rest of your math logic stays exactly the same) ...
             base_rate = rate_p + excise + trans + labour
             
             if d_type == "Per Unit":
