@@ -318,7 +318,17 @@ if st.session_state.bill_items:
     df_bill = pd.DataFrame(st.session_state.bill_items)
     st.dataframe(df_bill[['Material', 'Qty_Purchase', 'Unit_Purchase', 'Total_Item_Cost']])
     
-    st.metric("Total Bill Amount (Incl. 13% VAT)", f"{df_bill['Total_Item_Cost'].sum():,.2f}")
+    # --- NEW: DUAL TOTALS MATH ---
+    total_bill = df_bill['Total_Item_Cost'].sum()
+    
+    # Deduct Transport and Labour, INCLUDING the 13% VAT that was applied to them
+    deductions = (df_bill['Transport_Kg'] + df_bill['Labour_Kg']) * df_bill['Qty_Purchase'] * 1.13
+    total_supplier_only = total_bill - deductions.sum()
+    
+    # Display side-by-side
+    t1, t2 = st.columns(2)
+    t1.metric("Total Landed Bill (All Included)", f"{total_bill:,.2f}")
+    t2.metric("Supplier Invoice (Excl. Transport/Labour)", f"{total_supplier_only:,.2f}")
 
     if st.button("💾 Save Final Bill & Update Costings"):
         try:
