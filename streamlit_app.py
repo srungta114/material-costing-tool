@@ -339,7 +339,20 @@ if st.session_state.bill_items:
             
             if not df_existing.empty:
                 df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                
+                # --- NEW CHRONOLOGICAL SORTING LOGIC ---
+                # 1. Convert the 'Date' column so Python understands it as a real calendar date
+                df_combined['Date'] = pd.to_datetime(df_combined['Date'])
+                
+                # 2. Sort everything from oldest date to newest date
+                df_combined = df_combined.sort_values(by='Date', ascending=True)
+                
+                # 3. Drop duplicates. Because it's sorted, keep='last' ALWAYS keeps the newest calendar date!
                 df_combined = df_combined.drop_duplicates(subset=['Material'], keep='last')
+                
+                # 4. Convert the dates back to normal text before sending to Google Sheets
+                df_combined['Date'] = df_combined['Date'].dt.strftime('%Y-%m-%d')
+                
             else:
                 df_combined = df_new
                 
@@ -349,7 +362,7 @@ if st.session_state.bill_items:
             purchases_sheet.clear() 
             purchases_sheet.update(values=data_to_write, range_name="A1")
             
-            st.success("✅ Sheet updated! Old costings were removed and new costings were saved.")
+            st.success("✅ Sheet updated! Costings successfully prioritized by newest bill date.")
             st.balloons()
             st.session_state.bill_items = [] 
             st.rerun()
