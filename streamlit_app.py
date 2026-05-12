@@ -94,9 +94,16 @@ st.header("🔍 Quick Costing Search")
 with st.expander("Search Master Database", expanded=False): 
     if not df_purchases.empty and 'Material' in df_purchases.columns:
         search_materials = sorted(df_purchases['Material'].dropna().unique().tolist())
-        search_selection = st.selectbox("Type or select a material to view its latest costing:", ["-- Select Material --"] + search_materials)
         
-        if search_selection != "-- Select Material --":
+        # SMART PLACEHOLDER SEARCH
+        search_selection = st.selectbox(
+            "Search Database", 
+            options=search_materials, 
+            index=None, 
+            placeholder="Type or click here to search for a material..."
+        )
+        
+        if search_selection:
             item_data = df_purchases[df_purchases['Material'] == search_selection].iloc[-1]
             
             st.info(f"**Supplier:** {item_data.get('Seller', 'N/A')} | **Bill No:** {item_data.get('Bill_No', 'N/A')} | **Date:** {item_data.get('Date', 'N/A')}")
@@ -150,10 +157,17 @@ with st.container(border=True):
     c1, c2, c3 = st.columns(3)
     
     seller_options = ["➕ Add New Seller..."] + existing_sellers
-    selected_seller = c1.selectbox("Seller Company Name", seller_options)
+    
+    # SMART PLACEHOLDER SEARCH
+    selected_seller = c1.selectbox(
+        "Seller Company Name", 
+        options=seller_options, 
+        index=None, 
+        placeholder="Select a Seller..."
+    )
     
     if selected_seller == "➕ Add New Seller...":
-        seller_name = c1.text_input("Type New Seller Name Here")
+        seller_name = c1.text_input("New Seller Name", placeholder="Type New Seller Name Here")
     else:
         seller_name = selected_seller
         
@@ -180,11 +194,17 @@ with st.container(border=True):
     if not df_master.empty and 'Item_Name' in df_master.columns:
         product_list = sorted(df_master['Item_Name'].unique())
     else:
-        product_list = ["-- No Products Found --"]
+        product_list = []
 
-    selected_product = st.selectbox("Select Product", product_list)
+    # SMART PLACEHOLDER SEARCH
+    selected_product = st.selectbox(
+        "Select Product", 
+        options=product_list, 
+        index=None, 
+        placeholder="Type or click to find a product..."
+    )
 
-    if selected_product != "-- No Products Found --":
+    if selected_product:
         item_info = df_master[df_master['Item_Name'] == selected_product].iloc[0]
         
         group = item_info['Group']
