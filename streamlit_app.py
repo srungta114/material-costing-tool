@@ -150,6 +150,107 @@ with st.expander("Search Master Database", expanded=False):
 
 st.divider()
 
+# --- 3.5 EDIT OR DELETE OLD BILLS ---
+st.header("✏️ Edit Old Bills")
+with st.expander("Modify or Delete an existing bill", expanded=False):
+    if not df_purchases.empty and all(col in df_purchases.columns for col in ['Bill_No', 'Seller', 'Date']):
+        
+        # 1. Create a temporary unique ID combining all three details
+        df_purchases['Unique_Bill_ID'] = df_purchases['Seller'].astype(str) + " | Bill: " + df_purchases['Bill_No'].astype(str) + " | Date: " + df_purchases['Date'].astype(str)
+        
+        # 2. Extract just the unique combinations for the dropdown
+        unique_bill_options = sorted(df_purchases['Unique_Bill_ID'].unique().tolist())
+        
+        edit_selection = st.selectbox(
+            "Search for Bill to Edit (Matches Seller + Bill No + Date)", 
+            options=unique_bill_options, 
+            index=None, 
+            placeholder="Type Seller name, Bill No, or Date..."
+        )
+        
+        if edit_selection:
+            # 3. Filter the master database for JUST this exact combination
+            bill_mask = df_purchases['Unique_Bill_ID'] == edit_selection
+            
+            # 4. Drop the temporary ID column before showing it to the user
+            bill_data = df_purchases[bill_mask].drop(columns=['Unique_Bill_ID']).copy()
+            
+            st.info("Edit the numerical values directly in the table below. The app will automatically recalculate Landed Rates and Totals when you save.")
+            
+            # Show the interactive data editor
+            edited_df = st.data_editor(
+                bill_data, 
+                hide_index=True, 
+                use_container_width=True,
+                disabled=["Seller", "Bill_No", "Date", "Group", "Sub-Group", "Material", "Unit_Purchase", "Unit_Sales"] 
+            )
+            
+            c1, c2 = st.columns(2)
+            
+            # --- SAVE EDITS BUTTON ---
+            if c1.button("💾 Save Changes to Bill"):
+                try:
+                    # Recalculate the Math
+                    base_rate = edited_df['Rate_Purchase'].astype(float) + edited_df['Excise_Kg'].astype(float) + edited_df['Transport_Kg'].astype(float) + edited_df['Labour_Kg'].astype(float)
+                    edited_df['Landed_Rate_Purchase'] = round(base_rate * 1.13, 2)
+                    edited_df['Total_Item_Cost'] = round(edited_df['Landed_Rate_Purchase'] * edited_df['Qty_Purchase'].astype(float), 2)
+                    
+                    def calc_cost_pc(row):
+                        return round(row['Total_Item_Cost'] / row['Qty_Sales'], 2) if float(row['Qty_Sales']) > 0 else 0
+                        
+                    edited_df['Cost_Pc'] = edited_df.apply(calc_cost_pc, axis=1)
+                    
+                    # Remove the temporary column from the master sheet before combining
+                    df_purchases_clean = df_purchases.drop(columns=['Unique_Bill_ID'])
+                    
+                    # Remove the old bill rows and swap in the newly edited rows
+                    df_purchases_untouched = df_purchases_clean[~bill_mask].copy()
+                    df_combined = pd.concat([df_purchases_untouched, edited_df], ignore_index=True)
+                    
+                    # Sort chronologically and upload to Google Sheets
+                    purchases_sheet = sh.worksheet("Purchases")
+                    df_combined['Date'] = pd.to_datetime(df_combined['Date'])
+                    df_combined = df_combined.sort_values(by='Date', ascending=True)
+                    df_combined['Date'] = df_combined['Date'].dt.strftime('%Y-%m-%d')
+                    
+                    df_clean = df_combined.fillna("")
+                    data_to_write = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
+                    
+                    purchases_sheet.clear()
+                    purchases_sheet.update(values=data_to_write, range_name="A1")
+                    
+                    st.success(f"✅ Bill updated successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Save failed: {e}")
+                    
+            # --- DELETE BILL BUTTON ---        
+            if c2.button("🗑️ Delete Entire Bill", type="primary"):
+                try:
+                    # Remove the temporary column from the master sheet
+                    df_purchases_clean = df_purchases.drop(columns=['Unique_Bill_ID'])
+                    
+                    # Keep everything EXCEPT the selected bill
+                    df_combined = df_purchases_clean[~bill_mask].copy()
+                    
+                    purchases_sheet = sh.worksheet("Purchases")
+                    
+                    if not df_combined.empty:
+                        df_combined['Date'] = pd.to_datetime(df_combined['Date'])
+                        df_combined = df_combined.sort_values(by='Date', ascending=True)
+                        df_combined['Date'] = df_combined['Date'].dt.strftime('%Y-%m-%d')
+                        df_clean = df_combined.fillna("")
+                        data_to_write = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
+                    else:
+                        data_to_write = [df_purchases_clean.columns.values.tolist()] 
+                    
+                    purchases_sheet.clear()
+                    purchases_sheet.update(values=data_to_write, range_name="A1")
+                    
+                    st.success(f"🗑️ Bill deleted from database!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Delete failed: {e}")
 
 # --- 4. BILL HEADER & DUPLICATE CHECK ---
 st.header("1. Bill Details")
