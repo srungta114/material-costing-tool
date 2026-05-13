@@ -275,8 +275,10 @@ with st.container(border=True):
     bill_no = c2.text_input("Bill No.")
     purchase_date = c3.date_input("Purchase Date")
 
-# --- UPGRADED DUPLICATE CHECK (WITH UNLOCK FEATURE) ---
+# Duplicate Bill Check Logic
 is_duplicate_bill = False
+existing_items_in_bill = [] # Create an empty list to track items
+
 if not df_purchases.empty and seller_name and bill_no:
     clean_seller = str(seller_name).strip().lower()
     clean_bill = str(bill_no).strip().lower()
@@ -287,7 +289,10 @@ if not df_purchases.empty and seller_name and bill_no:
     if (mask_seller & mask_bill).any():
         st.warning(f"⚠️ **Bill Found:** Bill No. '{bill_no}' from '{seller_name}' is already in the database.")
         
-        # New unlock checkbox
+        # Fetch the data for this specific bill
+        bill_data = df_purchases[mask_seller & mask_bill]
+        existing_items_in_bill = bill_data['Material'].tolist() # Save the items to check later
+        
         append_mode = st.checkbox("Unlock entry to add missing items to this existing bill")
         
         if not append_mode:
@@ -295,7 +300,11 @@ if not df_purchases.empty and seller_name and bill_no:
             st.error("🛑 Entry locked to prevent accidental duplicates. Check the box above to unlock.")
         else:
             is_duplicate_bill = False
-            st.info("🔓 Unlocked! Ensure your 'Purchase Date' above matches the original bill. Items added below will be appended to it.")
+            st.info("🔓 Unlocked! Ensure your 'Purchase Date' matches the original bill.")
+            
+            # --- NEW: DISPLAY EXISTING ITEMS ---
+            st.write("**Items already recorded on this bill:**")
+            st.dataframe(bill_data[['Material', 'Qty_Purchase', 'Unit_Purchase', 'Landed_Rate_Purchase', 'Total_Item_Cost']], hide_index=True)
 
 
 # --- 5. ITEM ENTRY ---
