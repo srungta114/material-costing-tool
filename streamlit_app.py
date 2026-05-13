@@ -275,7 +275,7 @@ with st.container(border=True):
     bill_no = c2.text_input("Bill No.")
     purchase_date = c3.date_input("Purchase Date")
 
-# Duplicate Bill Check Logic
+# --- UPGRADED DUPLICATE CHECK (WITH UNLOCK FEATURE) ---
 is_duplicate_bill = False
 if not df_purchases.empty and seller_name and bill_no:
     clean_seller = str(seller_name).strip().lower()
@@ -285,8 +285,17 @@ if not df_purchases.empty and seller_name and bill_no:
     mask_bill = df_purchases['Bill_No'].astype(str).str.strip().str.lower() == clean_bill
     
     if (mask_seller & mask_bill).any():
-        is_duplicate_bill = True
-        st.error(f"🛑 **Duplicate Detected:** Bill No. '{bill_no}' from '{seller_name}' already exists in the database. Entry is locked.")
+        st.warning(f"⚠️ **Bill Found:** Bill No. '{bill_no}' from '{seller_name}' is already in the database.")
+        
+        # New unlock checkbox
+        append_mode = st.checkbox("Unlock entry to add missing items to this existing bill")
+        
+        if not append_mode:
+            is_duplicate_bill = True
+            st.error("🛑 Entry locked to prevent accidental duplicates. Check the box above to unlock.")
+        else:
+            is_duplicate_bill = False
+            st.info("🔓 Unlocked! Ensure your 'Purchase Date' above matches the original bill. Items added below will be appended to it.")
 
 
 # --- 5. ITEM ENTRY ---
